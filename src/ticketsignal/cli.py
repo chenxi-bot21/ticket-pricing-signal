@@ -16,10 +16,14 @@ from .model import train_and_score
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Ticket fair-value signal")
-    ap.add_argument("--source", choices=["synthetic", "seatgeek", "csv"],
+    ap.add_argument("--source",
+                    choices=["synthetic", "seatgeek", "ticketmaster", "csv"],
                     default="synthetic")
     ap.add_argument("--client-id", default=None,
                     help="SeatGeek client id (free at seatgeek.com/build)")
+    ap.add_argument("--api-key", default=None,
+                    help="Ticketmaster Discovery API key "
+                         "(free at developer.ticketmaster.com)")
     ap.add_argument("--pages", type=int, default=5)
     ap.add_argument("--n", type=int, default=1500,
                     help="synthetic events to generate")
@@ -41,6 +45,11 @@ def main() -> None:
         if not args.client_id:
             ap.error("--client-id is required with --source seatgeek")
         df = fetch_seatgeek_events(args.client_id, pages=args.pages)
+    elif args.source == "ticketmaster":
+        if not args.api_key:
+            ap.error("--api-key is required with --source ticketmaster")
+        from .ticketmaster import fetch_ticketmaster_events
+        df = fetch_ticketmaster_events(args.api_key)
     else:
         df = synthetic_events(n=args.n)
 

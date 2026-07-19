@@ -57,6 +57,41 @@ class TestModel(unittest.TestCase):
         self.assertIn("confidence", s.columns)
 
 
+class TestTicketmasterParser(unittest.TestCase):
+    def _event(self, **over):
+        from datetime import datetime, timedelta, timezone
+        start = (datetime.now(timezone.utc) + timedelta(days=30))
+        ev = {
+            "id": "tm1", "name": "Test Show",
+            "priceRanges": [{"type": "standard", "min": 40.0, "max": 80.0}],
+            "dates": {"start": {
+                "dateTime": start.strftime("%Y-%m-%dT%H:%M:%SZ")}},
+            "classifications": [{"genre": {"name": "Rock"},
+                                 "segment": {"name": "Music"}}],
+            "_embedded": {
+                "venues": [{"city": {"name": "Boston"},
+                            "upcomingEvents": {"_total": 55}}],
+                "attractions": [{"upcomingEvents": {"_total": 12}}]},
+        }
+        ev.update(over)
+        return ev
+
+    def test_parse_and_finalize_contract(self):
+        from datetime import datetime, timezone
+        from ticketsignal.ticketmaster import _finalize, _parse_event
+        now = datetime.now(timezone.utc)
+        row = _parse_event(self._event(), now)
+        self.assertEqual(row["avg_price"], 60.0)      # (40+80)/2
+        self.assertEqual(row["taxonomy"], "rock")
+        # events without a standard price range are skipped
+        self.assertIsNone(_parse_event(self._event(priceRanges=[]), now))
+        df = _finalize([_parse_event(self._event(id=f"tm{i}"), now)
+                        for i in range(10)])
+        for col in ["event_score", "performer_score", TARGET]:
+            self.assertIn(col, df.columns)
+        self.assertTrue(df["performer_score"].between(0, 1).all())
+
+
 class TestHighCardinality(unittest.TestCase):
     def test_many_categories_still_fit(self):
         # real-world pulls (e.g. Ticketmaster) carry dozens of genres/cities;

@@ -22,9 +22,26 @@ production forecasting:
 
 | Source | What it is |
 |---|---|
+| **Ticketmaster Discovery API** (connector) | Real upcoming US events with real `priceRanges` — the only freely accessible price signal found in due diligence (free key at developer.ticketmaster.com). Also parses two demand proxies from the same payload: artist tour size and venue activity. Terms don't allow redistributing pulled data, so no dataset ships here — run it with your own key. |
 | **Synthetic market** (offline, default) | Seeded generator with realistic drivers: popularity premium, supply discount, time-to-event dynamics (cold events decay, hot events climb), weekend effect. Because the true drivers are known by construction, estimator recovery is testable. |
 | **SeatGeek public API** (connector) | Upcoming events with popularity scores and timing. **Field note from due diligence:** SeatGeek now gates the price stats (`average_price`, `listing_count`) to partner-level apps — verified empirically; new client ids receive event metadata but null prices. The connector is written and the pipeline is source-agnostic, so any priced feed (a marketplace partner API, or a broker's own data) drops in via the same contract. |
 | **Cached CSV** | Any raw pull (or any dataset matching the column contract) re-runs offline via `--source csv` / the dashboard uploader. |
+
+## Real-data experiment (Ticketmaster, 5,498 events)
+
+Pulled 5,498 unique priced US events (all 50 states, 12 months out, 15+
+genres) and ran the identical pipeline twice:
+
+| Round | Features | MAE | Lift vs genre-mean | R² |
+|---|---|---|---|---|
+| 1 | public only: genre, city, timing | $24.2 | 15% | 0.04 |
+| 2 | + two crude demand proxies (artist tour size, venue activity) | **$18.1** | **37%** | **0.30** |
+
+Two findings. **The demand signal is where the power is** — even crude
+public proxies triple the model's edge, and permutation importance
+concentrates on them (0.48 + 0.30); a marketplace's own demand data (sales
+velocity, transactions) is the upgrade path. And the uncertainty band stays
+honest on real data: **78.5% measured vs 80% nominal** coverage.
 
 ## Quickstart
 
