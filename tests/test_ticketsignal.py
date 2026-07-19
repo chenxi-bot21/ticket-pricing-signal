@@ -57,6 +57,18 @@ class TestModel(unittest.TestCase):
         self.assertIn("confidence", s.columns)
 
 
+class TestHighCardinality(unittest.TestCase):
+    def test_many_categories_still_fit(self):
+        # real-world pulls (e.g. Ticketmaster) carry dozens of genres/cities;
+        # the one-hot block must stay dense or the GBM rejects it
+        df = synthetic_events(n=400, seed=3)
+        rng = np.random.default_rng(3)
+        df["taxonomy"] = rng.choice([f"genre_{i}" for i in range(40)], len(df))
+        df["venue_city"] = rng.choice([f"city_{i}" for i in range(120)], len(df))
+        rep = train_and_score(build_features(df))
+        self.assertEqual(len(rep.scored), len(df))
+
+
 class TestBacktest(unittest.TestCase):
     def test_walk_forward_signal_pays(self):
         panel = simulate_panel(n_events=300, n_weeks=18, seed=11)

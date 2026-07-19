@@ -31,7 +31,11 @@ from .features import CATEGORICAL, NUMERIC, TARGET
 
 def _pipeline(loss: str = "squared_error", quantile: float | None = None) -> Pipeline:
     prep = ColumnTransformer([
-        ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL),
+        # sparse_output=False: high-cardinality categoricals (real-world city/
+        # genre columns) would otherwise yield a sparse matrix, which
+        # HistGradientBoostingRegressor rejects.
+        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+         CATEGORICAL),
         ("num", "passthrough", NUMERIC),
     ])
     return Pipeline([
