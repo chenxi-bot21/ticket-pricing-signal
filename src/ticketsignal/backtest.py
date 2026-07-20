@@ -111,8 +111,9 @@ def walk_forward_backtest(panel: pd.DataFrame, min_train_weeks: int = 8,
             nxt[nxt["week"] == t], on=["week", "event_id"], how="inner")
         if len(test) < 30:
             continue
-        pipe = _pipeline().fit(train[CATEGORICAL + NUMERIC],
-                               np.log(train["avg_price"].to_numpy()))
+        pipe = _pipeline(num_cols=NUMERIC).fit(
+            train[CATEGORICAL + NUMERIC],
+            np.log(train["avg_price"].to_numpy()))
         fair = np.exp(pipe.predict(test[CATEGORICAL + NUMERIC]))
         test = test.assign(
             deal_score=100 * (fair - test["avg_price"]) / fair,

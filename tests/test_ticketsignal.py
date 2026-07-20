@@ -87,9 +87,21 @@ class TestTicketmasterParser(unittest.TestCase):
         self.assertIsNone(_parse_event(self._event(priceRanges=[]), now))
         df = _finalize([_parse_event(self._event(id=f"tm{i}"), now)
                         for i in range(10)])
-        for col in ["event_score", "performer_score", TARGET]:
+        for col in ["event_score", "performer_score", "venue_tier", TARGET]:
             self.assertIn(col, df.columns)
         self.assertTrue(df["performer_score"].between(0, 1).all())
+
+    def test_venue_tier_is_leave_one_out(self):
+        import pandas as pd
+        from ticketsignal.ticketmaster import venue_tier
+        # same venue, one cheap + one expensive event: each event's tier is
+        # driven by the OTHER's price, so the cheap event gets the higher tier
+        df = pd.DataFrame({
+            "venue_id": ["v1", "v1", "v2"],
+            "avg_price": [10.0, 1000.0, 50.0]})
+        tier = venue_tier(df)
+        self.assertGreater(tier.iloc[0], tier.iloc[1])
+        self.assertEqual(tier.iloc[2], 0.5)      # single-event venue: neutral
 
 
 class TestHighCardinality(unittest.TestCase):

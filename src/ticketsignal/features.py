@@ -11,8 +11,17 @@ import pandas as pd
 TARGET = "avg_price"
 NUMERIC = ["days_to_event", "weekend", "event_score", "performer_score",
            "log_listings", "near_event", "score_x_near"]
+# present only when the source can provide them (e.g. venue_tier from the
+# Ticketmaster connector's leave-one-out venue price level)
+OPTIONAL_NUMERIC = ["venue_tier"]
 CATEGORICAL = ["taxonomy"]
 META = ["event_id", "title", "venue_city"]
+
+
+def feature_columns(df: pd.DataFrame) -> list[str]:
+    """Model input columns for this frame (optional features if present)."""
+    return (CATEGORICAL + NUMERIC
+            + [c for c in OPTIONAL_NUMERIC if c in df.columns])
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:

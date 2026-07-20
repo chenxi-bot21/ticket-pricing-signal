@@ -26,17 +26,18 @@ from sklearn.model_selection import KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-from .features import CATEGORICAL, NUMERIC, TARGET
+from .features import CATEGORICAL, NUMERIC, TARGET, feature_columns
 
 
-def _pipeline(loss: str = "squared_error", quantile: float | None = None) -> Pipeline:
+def _pipeline(loss: str = "squared_error", quantile: float | None = None,
+              num_cols: list[str] | None = None) -> Pipeline:
     prep = ColumnTransformer([
         # sparse_output=False: high-cardinality categoricals (real-world city/
         # genre columns) would otherwise yield a sparse matrix, which
         # HistGradientBoostingRegressor rejects.
         ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False),
          CATEGORICAL),
-        ("num", "passthrough", NUMERIC),
+        ("num", "passthrough", NUMERIC if num_cols is None else num_cols),
     ])
     return Pipeline([
         ("prep", prep),
@@ -66,7 +67,8 @@ class SignalReport:
 def train_and_score(df: pd.DataFrame, n_splits: int = 5,
                     seed: int = 0) -> SignalReport:
     """Cross-validated out-of-sample fair values + deal scores for every event."""
-    X = df[CATEGORICAL + NUMERIC]
+    X = df[feature_columns(df)]
+    num_cols = [c for c in X.columns if c not in CATEGORICAL]
     y_log = np.log(df[TARGET].to_numpy())
     y = df[TARGET].to_numpy()
 
@@ -75,9 +77,11 @@ def train_and_score(df: pd.DataFrame, n_splits: int = 5,
     hi = np.zeros(len(df))
     kf = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
     for tr, te in kf.split(X):
-        mid = _pipeline().fit(X.iloc[tr], y_log[tr])
-        q10 = _pipeline("quantile", 0.10).fit(X.iloc[tr], y_log[tr])
-        q90 = _pipeline("quantile", 0.90).fit(X.iloc[tr], y_log[tr])
+        mid = _pipeline(num_cols=num_cols).fit(X.iloc[tr], y_log[tr])
+        q10 = _pipeline("quantile", 0.10,
+                        num_cols=num_cols).fit(X.iloc[tr], y_log[tr])
+        q90 = _pipeline("quantile", 0.90,
+                        num_cols=num_cols).fit(X.iloc[tr], y_log[tr])
         fair[te] = np.exp(mid.predict(X.iloc[te]))
         lo[te] = np.exp(q10.predict(X.iloc[te]))
         hi[te] = np.exp(q90.predict(X.iloc[te]))
@@ -104,7 +108,7 @@ def train_and_score(df: pd.DataFrame, n_splits: int = 5,
 
     # ---- explainability: permutation importance on a held-out fold --------
     tr, te = next(KFold(n_splits=5, shuffle=True, random_state=1).split(X))
-    pipe = _pipeline().fit(X.iloc[tr], y_log[tr])
+    pipe = _pipeline(num_cols=num_cols).fit(X.iloc[tr], y_log[tr])
     imp = permutation_importance(pipe, X.iloc[te], y_log[te],
                                  n_repeats=8, random_state=0)
     importance = (pd.DataFrame({

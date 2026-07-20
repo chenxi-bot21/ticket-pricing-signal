@@ -24,6 +24,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -59,6 +60,7 @@ def _parse_event(ev: dict, now: datetime) -> dict | None:
     attractions = emb.get("attractions") or [{}]
     return {
         "event_id": ev.get("id"),
+        "venue_id": venues[0].get("id") or "",
         "title": ev.get("name", ""),
         "taxonomy": taxonomy.lower(),
         "days_to_event": round(days, 2),
@@ -71,6 +73,23 @@ def _parse_event(ev: dict, now: datetime) -> dict | None:
         "venue_city": ((venues[0].get("city") or {}).get("name")) or "",
         "avg_price": round((lo + hi) / 2, 2),
     }
+
+
+def venue_tier(df: pd.DataFrame) -> pd.Series:
+    """Venue price level as a 0-1 percentile — computed LEAVE-ONE-OUT.
+
+    A venue's other events reveal its tier (a listening room's shows all
+    cost ~$20; an arena's don't) — without it, activity proxies confuse
+    "busy" with "premium". Each event's tier uses only the *other* events
+    at its venue, so its own price never leaks into its features; venues
+    seen once get a neutral 0.5.
+    """
+    logp = np.log(df["avg_price"])
+    g = df.groupby("venue_id")["avg_price"].transform(
+        lambda s: np.log(s).sum())
+    n = df.groupby("venue_id")["avg_price"].transform("size")
+    loo = (g - logp) / (n - 1)
+    return loo.rank(pct=True).fillna(0.5).round(4)
 
 
 def _finalize(rows: list[dict], top_genres: int = 12,
@@ -86,6 +105,7 @@ def _finalize(rows: list[dict], top_genres: int = 12,
                                               "Other")
     df["performer_score"] = df["attr_upcoming"].rank(pct=True).round(4)
     df["event_score"] = df["venue_upcoming"].rank(pct=True).round(4)
+    df["venue_tier"] = venue_tier(df)
     return df.drop(columns=["attr_upcoming", "venue_upcoming"])
 
 

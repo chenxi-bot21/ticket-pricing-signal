@@ -27,21 +27,26 @@ production forecasting:
 | **SeatGeek public API** (connector) | Upcoming events with popularity scores and timing. **Field note from due diligence:** SeatGeek now gates the price stats (`average_price`, `listing_count`) to partner-level apps — verified empirically; new client ids receive event metadata but null prices. The connector is written and the pipeline is source-agnostic, so any priced feed (a marketplace partner API, or a broker's own data) drops in via the same contract. |
 | **Cached CSV** | Any raw pull (or any dataset matching the column contract) re-runs offline via `--source csv` / the dashboard uploader. |
 
-## Real-data experiment (Ticketmaster, 5,498 events)
+## Real-data experiment (Ticketmaster, ~6,500 events)
 
-Pulled 5,498 unique priced US events (all 50 states, 12 months out, 15+
-genres) and ran the identical pipeline twice:
+Pulled the priced upcoming US(+CA) events reachable through the Discovery
+API (all 50 states, 12 months out, 15+ genres) and ran the identical
+pipeline three times, adding one feature family per round:
 
 | Round | Features | MAE | Lift vs genre-mean | R² |
 |---|---|---|---|---|
 | 1 | public only: genre, city, timing | $24.2 | 15% | 0.04 |
-| 2 | + two crude demand proxies (artist tour size, venue activity) | **$18.1** | **37%** | **0.30** |
+| 2 | + two crude demand proxies (artist tour size, venue activity) | $18.1 | 37% | 0.30 |
+| 3 | + leave-one-out venue price tier | **$12.5** | **57%** | **0.65** |
 
-Two findings. **The demand signal is where the power is** — even crude
-public proxies triple the model's edge, and permutation importance
-concentrates on them (0.48 + 0.30); a marketplace's own demand data (sales
-velocity, transactions) is the upgrade path. And the uncertainty band stays
-honest on real data: **78.5% measured vs 80% nominal** coverage.
+Findings, in order. **Demand signal**: even crude public proxies more than
+double the edge — a marketplace's own demand data (sales velocity,
+transactions) is the upgrade path. **Venue tier**: round 2's residual
+failure mode was over-appraising busy-but-cheap club venues (activity ≠
+premium); a leave-one-out venue price level — each event sees only the
+*other* events at its venue, so its own price never leaks — fixes the
+segment and becomes the single strongest feature. And the uncertainty band
+stays honest throughout: **~78–79% measured vs 80% nominal** coverage.
 
 ## Quickstart
 
