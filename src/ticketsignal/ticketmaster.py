@@ -92,17 +92,14 @@ def venue_tier(df: pd.DataFrame) -> pd.Series:
     return loo.rank(pct=True).fillna(0.5).round(4)
 
 
-def _finalize(rows: list[dict], top_genres: int = 12,
-              top_cities: int = 20) -> pd.DataFrame:
+def _finalize(rows: list[dict], top_genres: int = 12) -> pd.DataFrame:
     """Bucket long-tail categories; percentile-rank the demand proxies."""
     df = pd.DataFrame(rows)
     if df.empty:
         return df
     keep = df["taxonomy"].value_counts().head(top_genres).index
     df["taxonomy"] = df["taxonomy"].where(df["taxonomy"].isin(keep), "other")
-    keep = df["venue_city"].value_counts().head(top_cities).index
-    df["venue_city"] = df["venue_city"].where(df["venue_city"].isin(keep),
-                                              "Other")
+    # venue_city is display-only (META, never encoded) — keep real names
     df["performer_score"] = df["attr_upcoming"].rank(pct=True).round(4)
     df["event_score"] = df["venue_upcoming"].rank(pct=True).round(4)
     df["venue_tier"] = venue_tier(df)
