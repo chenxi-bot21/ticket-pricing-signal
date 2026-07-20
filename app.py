@@ -7,6 +7,8 @@ Needs the `app` extras: pip install -e ".[app]"   (streamlit + plotly)
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,6 +16,11 @@ import streamlit as st
 
 from ticketsignal import (build_features, fetch_seatgeek_events,
                           synthetic_events, train_and_score)
+
+# Drop a real pull here (e.g. from the Ticketmaster connector) and the app
+# loads it by default — no upload step. Git-ignored: pulled data must not be
+# redistributed (Ticketmaster terms).
+LOCAL_CACHE = Path(__file__).parent / "data" / "real_events.csv"
 
 st.set_page_config(page_title="Ticket Fair-Value Signal", layout="wide")
 st.title("Secondary-Market Ticket Pricing Signal")
@@ -26,7 +33,9 @@ with st.sidebar:
     st.header("Data")
     source = st.radio("Source", ["Synthetic market (offline)",
                                  "SeatGeek API (live)",
-                                 "Cached pull (CSV)"])
+                                 "Cached pull (CSV)"],
+                      index=2 if LOCAL_CACHE.exists() else 0)
+    upload = None
     if source.startswith("SeatGeek"):
         client_id = st.text_input("SeatGeek client id", type="password",
                                   help="Free at seatgeek.com/build")
@@ -35,7 +44,12 @@ with st.sidebar:
             st.info("Enter a client id to pull live events.")
             st.stop()
     elif source.startswith("Cached"):
-        upload = st.file_uploader("Raw pull CSV (from cli --save-raw)", type="csv")
+        if LOCAL_CACHE.exists() and st.checkbox(
+                "Use local cache (data/real_events.csv)", value=True):
+            upload = LOCAL_CACHE
+        else:
+            upload = st.file_uploader(
+                "Raw pull CSV (from cli --save-raw)", type="csv")
         if upload is None:
             st.info("Upload a cached raw pull to score it offline.")
             st.stop()
@@ -45,6 +59,12 @@ with st.sidebar:
 
     st.header("Deal filter")
     min_listings = st.slider("Min listings (liquidity)", 0, 200, 20)
+    min_price = st.number_input(
+        "Min ticket price (USD)", min_value=0.0, value=15.0, step=5.0,
+        help="Business filter: promo/$1 tickets are intentionally "
+             "underpriced to drive foot traffic — a comparables model "
+             "correctly calls them 'cheap', but they aren't mispricings. "
+             "A deal score needs business filters on top.")
 
 
 @st.cache_data(show_spinner="Scoring events…")
@@ -85,7 +105,8 @@ tab1, tab2, tab3, tab4 = st.tabs(
 
 # ---------------- Tab 1: deal finder ----------------
 with tab1:
-    liquid = scored[scored["listing_count"] >= min_listings]
+    liquid = scored[(scored["listing_count"] >= min_listings)
+                    & (scored["avg_price"] >= min_price)]
     st.subheader("Listed below fair value (potential buys)")
     cols = ["title", "taxonomy", "venue_city", "days_to_event",
             "listing_count", "avg_price", "fair_low", "fair_price",
