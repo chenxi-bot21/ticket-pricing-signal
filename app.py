@@ -122,9 +122,15 @@ with tab1:
     st.dataframe(buys[cols + ["below_band_pct"]].head(15),
                  use_container_width=True, hide_index=True)
     st.subheader("Rich vs fair value (avoid / sell)")
-    rich = liquid[liquid["confidence"] == "high (above band)"]
-    st.dataframe(rich[cols].tail(10).iloc[::-1], use_container_width=True,
-                 hide_index=True)
+    # (fair-obs)/fair explodes toward -inf when obs >> fair; "x times the
+    # band ceiling" reads naturally instead
+    rich = liquid[liquid["confidence"] == "high (above band)"].copy()
+    rich["x_above_ceiling"] = np.round(
+        rich["avg_price"] / rich["fair_high"], 1)
+    rich = rich.sort_values("x_above_ceiling", ascending=False)
+    rich_cols = [c for c in cols if c != "deal_score_pct"]
+    st.dataframe(rich[rich_cols + ["x_above_ceiling"]].head(10),
+                 use_container_width=True, hide_index=True)
     st.caption("deal_score_pct = (fair − observed) / fair × 100; every fair "
                "value is an out-of-sample prediction. `confidence` is high "
                "only when the observed price falls outside the entire "
