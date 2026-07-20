@@ -47,6 +47,15 @@ def _pipeline(loss: str = "squared_error", quantile: float | None = None) -> Pip
     ])
 
 
+def _monotone(low: np.ndarray, mid: np.ndarray,
+              high: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Row-wise rearrangement: independently trained quantile models can
+    cross in sparse segments; sorting restores low <= mid <= high
+    (Chernozhukov et al.'s quantile rearrangement, the 3-point case)."""
+    stacked = np.sort(np.vstack([low, mid, high]), axis=0)
+    return stacked[0], stacked[1], stacked[2]
+
+
 @dataclass
 class SignalReport:
     metrics: dict
@@ -72,6 +81,8 @@ def train_and_score(df: pd.DataFrame, n_splits: int = 5,
         fair[te] = np.exp(mid.predict(X.iloc[te]))
         lo[te] = np.exp(q10.predict(X.iloc[te]))
         hi[te] = np.exp(q90.predict(X.iloc[te]))
+
+    lo, fair, hi = _monotone(lo, fair, hi)
 
     # ---- honest metrics vs naive baselines (all out-of-sample) -------------
     base_global = np.full(len(df), y.mean())

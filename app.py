@@ -107,13 +107,23 @@ tab1, tab2, tab3, tab4 = st.tabs(
 with tab1:
     liquid = scored[(scored["listing_count"] >= min_listings)
                     & (scored["avg_price"] >= min_price)]
-    st.subheader("Listed below fair value (potential buys)")
     cols = ["title", "taxonomy", "venue_city", "days_to_event",
             "listing_count", "avg_price", "fair_low", "fair_price",
             "fair_high", "deal_score_pct", "confidence"]
-    st.dataframe(liquid[cols].head(15), use_container_width=True, hide_index=True)
+    st.subheader("Listed below fair value (potential buys)")
+    # band-validated only: price below the ENTIRE P10-P90 band. Ranking by
+    # point-estimate deal score alone promotes high-uncertainty
+    # extrapolations (wide bands) — so rank by the CONSERVATIVE margin
+    # instead: how far the price sits below the band's floor (P10).
+    buys = liquid[liquid["confidence"] == "high (below band)"].copy()
+    buys["below_band_pct"] = np.round(
+        100 * (buys["fair_low"] - buys["avg_price"]) / buys["fair_low"], 1)
+    buys = buys.sort_values("below_band_pct", ascending=False)
+    st.dataframe(buys[cols + ["below_band_pct"]].head(15),
+                 use_container_width=True, hide_index=True)
     st.subheader("Rich vs fair value (avoid / sell)")
-    st.dataframe(liquid[cols].tail(10).iloc[::-1], use_container_width=True,
+    rich = liquid[liquid["confidence"] == "high (above band)"]
+    st.dataframe(rich[cols].tail(10).iloc[::-1], use_container_width=True,
                  hide_index=True)
     st.caption("deal_score_pct = (fair − observed) / fair × 100; every fair "
                "value is an out-of-sample prediction. `confidence` is high "
